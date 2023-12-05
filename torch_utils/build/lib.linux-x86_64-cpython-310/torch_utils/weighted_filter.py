@@ -31,7 +31,7 @@ class WeightedFilterFunction(torch.autograd.Function):
 
 
 class WeightedFilter(torch.nn.Module):
-	def __init__(self, channels, kernel_size, bias=True, splat=False, level=2):
+	def __init__(self, channels, kernel_size, bias=True, splat=False, level=1):
 		super(WeightedFilter, self).__init__()
 		self.in_channels  = channels
 		self.out_channels = channels

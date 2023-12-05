@@ -10,8 +10,8 @@
 #include <vector>
 
 // CUDA forward declarations
-at::Tensor cuda_weighted_filter_forward(at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat);
-std::vector<at::Tensor> cuda_weighted_filter_backward(at::Tensor grad_out, at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat);
+at::Tensor cuda_weighted_filter_forward(at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat, int32_t level);
+std::vector<at::Tensor> cuda_weighted_filter_backward(at::Tensor grad_out, at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat, int32_t level);
 
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +29,8 @@ at::Tensor weighted_filter_forward(
     at::Tensor input,
     at::Tensor weights,
     int64_t kernel_size,
-    bool splat
+    bool splat,
+    int32_t level
 ) {
     CHECK_TENSOR_4D_FLOAT(input);
     CHECK_TENSOR_4D_FLOAT(weights);
@@ -37,7 +38,7 @@ at::Tensor weighted_filter_forward(
     AT_ASSERTM(weights.size(1) == kernel_size * kernel_size, "Weight tensors and kernel size missmatch");
     AT_ASSERTM(kernel_size % 2 == 1, "Kernel size must be odd");
 
-    return cuda_weighted_filter_forward(input, weights, kernel_size, splat);
+    return cuda_weighted_filter_forward(input, weights, kernel_size, splat, level);
 }
 
 std::vector<at::Tensor> weighted_filter_backward(
@@ -45,7 +46,8 @@ std::vector<at::Tensor> weighted_filter_backward(
     at::Tensor input,
     at::Tensor weights,
     int64_t kernel_size,
-    bool splat
+    bool splat,
+    int32_t level
 ) {
     CHECK_TENSOR_4D_FLOAT(grad_out);
     CHECK_TENSOR_4D_FLOAT(input);
@@ -55,7 +57,7 @@ std::vector<at::Tensor> weighted_filter_backward(
     AT_ASSERTM(weights.size(1) == kernel_size * kernel_size, "Weight tensors and kernel size missmatch");
     AT_ASSERTM(kernel_size % 2 == 1, "Kernel size must be odd");
 
-    return cuda_weighted_filter_backward(grad_out, input, weights, kernel_size, splat);
+    return cuda_weighted_filter_backward(grad_out, input, weights, kernel_size, splat, level);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

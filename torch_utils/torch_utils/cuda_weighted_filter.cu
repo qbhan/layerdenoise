@@ -40,7 +40,8 @@ __global__ void cuda_weighted_filter_forward_kernel(
     int32_t width,
     int32_t filter_h,
     int32_t filter_w,
-    bool splat)
+    bool splat,
+    int32_t level)
 {
     const int32_t ch          = blockIdx.y * blockDim.y + threadIdx.y;
     const int32_t pixel_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -57,8 +58,8 @@ __global__ void cuda_weighted_filter_forward_kernel(
         for (int32_t fx = 0; fx < filter_w; ++fx)
         {
             // Compute tap coordinates, used for input activations and bilateral guides
-            int32_t y = py + fy - (filter_h - 1) / 2;
-            int32_t x = px + fx - (filter_w - 1) / 2;
+            int32_t y = py + fy * level - (filter_h - 1) * level / 2;
+            int32_t x = px + fx * level - (filter_w - 1) * level / 2;
 
             if (y < 0 || x < 0 || y >= height || x >= width)
                 continue;
@@ -73,7 +74,7 @@ __global__ void cuda_weighted_filter_forward_kernel(
     output[ch*height*width + pixel_index] = result;
 }
 
-at::Tensor cuda_weighted_filter_forward(at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat)
+at::Tensor cuda_weighted_filter_forward(at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat, int32_t level)
 {
     // Get tensor shapes
     at::IntList input_shape = input.sizes();
@@ -101,7 +102,8 @@ at::Tensor cuda_weighted_filter_forward(at::Tensor input, at::Tensor weight, int
             (int32_t)input_shape[3],  // width
             (int32_t)kernel_size,     // filter_h
             (int32_t)kernel_size,     // filter_w
-            splat                     // splatting vs gather
+            splat,                    // splatting vs gather
+            (int32_t)level            // dilation level (1, 2, 4)
             );
     }
 
@@ -123,7 +125,8 @@ __global__ void cuda_weighted_filter_backward_kernel_activations(
     int32_t width,
     int32_t filter_h,
     int32_t filter_w,
-    bool splat)
+    bool splat,
+    int32_t level)
 {
     const int32_t ch          = blockIdx.y * blockDim.y + threadIdx.y;
     const int32_t pixel_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -140,8 +143,8 @@ __global__ void cuda_weighted_filter_backward_kernel_activations(
         for (int32_t fx = 0; fx < filter_w; ++fx)
         {
             // Gradient and guide coordinates, regular unflipped. This probably wont work with even sized filters
-            int32_t y = py + fy - (filter_h - 1) / 2;
-            int32_t x = px + fx - (filter_w - 1) / 2;
+            int32_t y = py + fy * level - (filter_h - 1) * level / 2;
+            int32_t x = px + fx * level - (filter_w - 1) * level / 2;
 
             // Check for out-of-bounds access
             if (y < 0 || x < 0 || y >= height || x >= width)
@@ -167,7 +170,8 @@ __global__ void cuda_weighted_filter_backward_kernel_weights(
     int32_t width,
     int32_t filter_h,
     int32_t filter_w,
-    bool splat)
+    bool splat,
+    int32_t level)
 {
     const int32_t weight_index = blockIdx.y * blockDim.y + threadIdx.y;
     const int32_t pixel_index  = blockIdx.x * blockDim.x + threadIdx.x;
@@ -188,8 +192,8 @@ __global__ void cuda_weighted_filter_backward_kernel_weights(
     if (splat)
     {
         // Compute tap offset in image space
-        int32_t y = py + (fy - (filter_h - 1) / 2);
-        int32_t x = px + (fx - (filter_w - 1) / 2);
+        int32_t y = py + (fy * level - (filter_h - 1) * level / 2);
+        int32_t x = px + (fx * level - (filter_w - 1) * level / 2);
 
         if (y >= 0 && x >= 0 && y < height && x < width)
         {
@@ -203,8 +207,8 @@ __global__ void cuda_weighted_filter_backward_kernel_weights(
     else
     {
         // Compute tap offset in image space
-        int32_t y = py + fy - (filter_h - 1) / 2;
-        int32_t x = px + fx - (filter_w - 1) / 2;
+        int32_t y = py + fy * level - (filter_h - 1) * level / 2;
+        int32_t x = px + fx * level - (filter_w - 1) * level / 2;
 
         if (y >= 0 && x >= 0 && y < height && x < width)
         {
@@ -220,7 +224,7 @@ __global__ void cuda_weighted_filter_backward_kernel_weights(
 }
 
 
-std::vector<at::Tensor> cuda_weighted_filter_backward(at::Tensor grad_out, at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat)
+std::vector<at::Tensor> cuda_weighted_filter_backward(at::Tensor grad_out, at::Tensor input, at::Tensor weight, int64_t kernel_size, bool splat, int32_t level)
 {
     // Get tensor shapes
     at::IntList input_shape  = input.sizes();
@@ -253,7 +257,8 @@ std::vector<at::Tensor> cuda_weighted_filter_backward(at::Tensor grad_out, at::T
                 (int32_t)input_shape[3],    // width
                 (int32_t)kernel_size,       // filter_h
                 (int32_t)kernel_size,       // filter_w
-                splat                       // splatting vs gather
+                splat,                      // splatting vs gather
+                (int32_t)level              // dilation level (1, 2, 4)
                 );
         }
     }
@@ -280,7 +285,8 @@ std::vector<at::Tensor> cuda_weighted_filter_backward(at::Tensor grad_out, at::T
                 (int32_t)input_shape[3],    // width
                 (int32_t)kernel_size,       // filter_h
                 (int32_t)kernel_size,       // filter_w
-                splat                       // splatting vs gather
+                splat,                      // splatting vs gather
+                (int32_t)level              // dilation level (1, 2, 4)
                 );
         }
     }

@@ -25,18 +25,16 @@ EPSILON = 0.000001 # Small epsilon to avoid division by zero
 ###############################################################################
 
 class LayerNet(nn.Module):
-	def __init__(self, sequenceHeader, tonemapper, splat, num_samples, kernel_size):
+	def __init__(self, n_in, tonemapper, splat):
 
 		super(LayerNet, self).__init__() 
 		self.tonemapper      = tonemapper  
 		self.output_channels = 128
 		self.embed_channels  = 32 
-		self.kernel_size     = kernel_size
-		self.num_samples     = int(num_samples)
+		self.kernel_size     = 17
+		#self.num_samples     = int(num_samples)
 		self.splat           = splat
-		self.resolution      = sequenceHeader.resolution
-		frameShape           = sequenceHeader.frameShape
-		self.input_channels  = frameShape.color[1] + frameShape.normals_depth[1] + frameShape.albedo[1] + frameShape.specular[1] + frameShape.uvt[1] + frameShape.motionvecs[1]
+		self.input_channels  = n_in # 24
 		self.layers          = 2
 
 		# Sample reducer: Maps from input channels to sample embeddings, uses 1x1 convolutions
@@ -80,25 +78,18 @@ class LayerNet(nn.Module):
 				if m.bias is not None:
 					m.bias.data.zero_()
 
-	def forward(self, sequenceData, epoch):
-		frame = sequenceData.frameData[0]
+	def forward(self, samples):
+		radiance = samples["radiance"]
+		features = samples["features"]
 
-		radiance = frame.color # Linear color values
-		
-		rgb           = self.tonemapper(frame.color)
-		normals_depth = frame.normals_depth
-		motionvecs    = frame.motionvecs
-		albedo        = frame.albedo
-		specular      = frame.specular
-		uvt           = frame.uvt
-
-		xc = torch.cat((rgb, normals_depth, motionvecs, albedo, specular, uvt), dim=2)
+		#xc = torch.cat((rgb, normals_depth, motionvecs, albedo, specular, uvt), dim=2)
 
 		# loop over samples to create embeddings
-		sh = xc.shape
+		sh = features.shape
 		embedding = torch.cuda.FloatTensor(sh[0], sh[1], self.embed_channels, sh[3], sh[4]).fill_(0)
+		#print(embedding.shape)
 		for i in range(sh[1]):
-			embedding[:, i, ...] = self._red1(xc[:,i,...])
+			embedding[:, i, ...] = self._red1(features[:,i,...])
 		avg_embeddings = embedding.mean(dim=1) # average over embeddings dimension
 
 		# Run U-net
@@ -111,9 +102,9 @@ class LayerNet(nn.Module):
 		l_e = [torch.cuda.FloatTensor(sh[0], self.embed_channels, sh[3], sh[4]).fill_(0) for i in range(self.layers)]
 
 		# Splat samples to layers
-		for i in range(0, self.num_samples): # loop over samples
+		for i in range(0, sh[1]): # loop over samples
 			w = self._sample_partitioner(torch.cat((embedding[:, i, ...], context), dim=1))
-			w = torch.softmax(w, dim=1) / self.num_samples
+			w = torch.softmax(w, dim=1) / sh[1]
 
 			for j in range(self.layers):
 				l_radiance[j] += radiance[:, i, ...] * w[:, j:j+1, ...]
@@ -143,7 +134,7 @@ class LayerNet(nn.Module):
 			col_sum     += filtered_rad * k
 			k            = (1.0 - alpha) * k
 
-		return utils.object_from_dict({'color' : col_sum})
+		return col_sum
 
 	def inference(self, sequenceData):
-		return self.forward(sequenceData, 0)
+		return self.forward(sequenceData)

@@ -27,7 +27,7 @@ class WeightedFilterFunction(torch.autograd.Function):
 	@staticmethod
 	def backward(ctx, grad_out):
 		grad_input, grad_weights = torch_utils_cpp.weighted_filter_backward(grad_out.contiguous(), *ctx.saved_variables, ctx._weighted_kernel_size, ctx._weighted_splat, ctx._level)
-		return grad_input, grad_weights, None, None
+		return grad_input, grad_weights, None, None, None
 
 
 class WeightedFilter(torch.nn.Module):

@@ -128,3 +128,19 @@ def getTimeString(remaining):
 		timestring = "seconds"
 	return timestring
 
+class MyExp(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        # Compute the forward pass (exp)
+        result = input.exp()
+        # Save result for backward pass
+        ctx.save_for_backward(result)
+        return result
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Retrieve saved result from forward pass
+        result, = ctx.saved_tensors
+        # Compute the gradient (d(exp(x))/dx = exp(x))
+        grad_input = grad_output * result
+        return grad_input

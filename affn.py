@@ -106,10 +106,13 @@ class AffinityNet(nn.Module):
 			jj = jj.unsqueeze(-1) + offset_jj
 			ii = ii % H
 			jj = jj % W
-			kernel_weight = f_pad[:, :, ii, jj]
-			kernel_weight = kernel_weight.reshape(B, -1, H, W, self.kernel_size, self.kernel_size)
+			affn_diff = f_pad[:, :, ii, jj]
+			affn_diff = affn_diff.reshape(B, -1, H, W, self.kernel_size, self.kernel_size)
 
-			kernel_weight = torch.exp(-a.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, 1, self.kernel_size, self.kernel_size)*torch.norm(kernel_weight, dim=1, keepdim=True).pow(2))
+			a = a.reshape(B, 1, H, W, 1, 1)
+			affn_norm = torch.norm(affn_diff, dim=1, keepdim=True).pow(2)
+			b = a*affn_norm
+			kernel_weight = torch.exp(-b) + 1e-9
 			kernel_weight[..., self.kernel_size//2, self.kernel_size//2] = c
 			kernel_weights.append(kernel_weight.squeeze(1).permute(0, 3, 4, 1, 2).reshape(B, -1, H, W))
 		return kernel_weights
